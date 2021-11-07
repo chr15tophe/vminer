@@ -6,7 +6,7 @@ A VenonaCoin miner.
 
 ### Windows
 
-You can download `vminer1-1-0_64.exe` (for 64-bit Windows machines) from the
+You can download `vminer1-1-1_64.exe` (for 64-bit Windows machines) from the
 Discord, or from [Releases](https://github.com/bcgeocaching/vminer/releases).
 
 You'll need to create a file called `vminer.conf` and paste
@@ -19,7 +19,7 @@ THRESHOLD = "0000020000000000000000000000000000000000000000000000000000000000"
 
 Obviously, you will need to modify those variables to the appropriate values.
 
-Finally, execute `.\vminer1-1-0_64.exe "your username" path/to/vminer.conf`.
+Finally, execute `.\vminer1-1-1_64.exe "your username" path/to/vminer.conf`.
 **Don't forget to sanity-check the values that are logged at the start**; if
 something isn't right then something has gone wrong!
 
