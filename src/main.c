@@ -11,6 +11,9 @@
 #define HEX2DEC(x) ((((x) ^ 16) + 7) % 39)
 
 // Compile-time constants.
+char *CHARSET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+int CHARSET_SIZE = 62;
+
 char *MAGIC_BYTES = "ISVENONACOINBEST";
 char *AUTHOR_TOKEN = "QUX5";
 
@@ -184,17 +187,29 @@ int main(int argc, char *argv[])
     memcpy(pt + 32, args.username, 16);
     memcpy(pt + 60, AUTHOR_TOKEN, 4);
     
+    uint8_t *nonce = calloc(12, sizeof(uint8_t));
+    
     // Initialize the nonce with a random value.
-    for (int j = 0; j < 12; ++j)
-        *(pt + 48 + j) = (unsigned char)('a' + (rand() % 26));
-
+    for (int i = 0; i < 12; ++i) {
+        nonce[i] = rand() % CHARSET_SIZE;
+        *(pt + 48 + i) = CHARSET[nonce[i]];
+    }
+    
+    printf("INFO: Initializing nonce at ");
+    for (unsigned char *it = pt + 48; it < pt + 64; ++it)
+        printf("%c", *it);
+    printf("\n");
+ 
     clock_t t1 = clock(), t2;
     uint64_t no = 0;
     while (1) {
-        // Modify the nonce, slightly.
-        *(pt + 48 + ((no + 0) % 12)) = (unsigned char)('a' + (rand() % 26));
-        *(pt + 48 + ((no + 2) % 12)) = (unsigned char)('a' + (rand() % 26));
-        *(pt + 48 + ((no + 4) % 12)) = (unsigned char)('a' + (rand() % 26));
+        // Increment the nonce.
+        for (int i = 11; i >= 0; --i) {
+            nonce[i] = (nonce[i] + 1) % CHARSET_SIZE;
+            *(pt + 48 + i) = CHARSET[nonce[i]];
+            if (nonce[i])
+                break;
+        }
 
         sha256_init(&ctx);
         sha256_update(&ctx, pt, 64);
@@ -207,7 +222,7 @@ int main(int argc, char *argv[])
             if (block_hash[i] >  args.threshold[i]) goto skip;
         }
 
-        printf("\nINFO: Found a valid nonce,\n\n    ");
+        printf("\nSUCCESS: Found a valid nonce,\n\n    ");
         for (unsigned char *it = pt + 48; it < pt + 64; ++it)
             printf("%c", *it);
         printf("\n\nThis produces a signature hash of ");
