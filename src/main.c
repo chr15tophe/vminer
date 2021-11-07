@@ -10,6 +10,29 @@
 SHA256_CTX ctx;
 time_t t;
 
+void readopt(FILE *fh, const char *prefix, unsigned char *dest, int size) {
+    #define READLINE_BUFFER_SIZE 128    
+
+    // Allocate a buffer, 
+    char buf[READLINE_BUFFER_SIZE];
+    memset(buf, ' ', READLINE_BUFFER_SIZE);
+    
+    // Read into the buffer.
+    (void)fgets(buf, READLINE_BUFFER_SIZE, fh);
+    for (int i = 0; i < READLINE_BUFFER_SIZE; i++)
+        if (buf[i] == '\x00' || buf[i] == '\n')
+            buf[i] = ' ';
+
+    // Check to make sure that the prefix matches the expected value.
+    if (memcmp(prefix, buf, strlen(prefix)) != 0) {
+        printf("WARN: Your configuration file is in an unexpected format.");
+    }
+
+    memcpy(dest, buf + strlen(prefix), size);
+
+    #undef READLINE_BUFFER_SIZE 
+}
+
 int main(int argc, char *argv[]) {
     if (argc != 2) {
         printf("usage: %s <vminer.conf>\n", argv[0]);
@@ -30,15 +53,13 @@ int main(int argc, char *argv[]) {
     // Read vminer.conf.
     //
 
-    char buf[128];
-
     FILE *fh = fopen(argv[1], "r");
 
-    memset(buf, ' ', 128); fgets(buf, 128, fh); for (int i = 0; i < 128; i++) { if (buf[i] == '\x00' || buf[i] == '\n') buf[i] = ' '; } memcpy(MAGIC_BYTES    , buf + 14, 16);
-    memset(buf, ' ', 128); fgets(buf, 128, fh); for (int i = 0; i < 128; i++) { if (buf[i] == '\x00' || buf[i] == '\n') buf[i] = ' '; } memcpy(USERNAME       , buf + 14, 16);
-    memset(buf, ' ', 128); fgets(buf, 128, fh); for (int i = 0; i < 128; i++) { if (buf[i] == '\x00' || buf[i] == '\n') buf[i] = ' '; } memcpy(PREV_BLOCK_HASH, buf + 14, 64);
-    memset(buf, ' ', 128); fgets(buf, 128, fh); for (int i = 0; i < 128; i++) { if (buf[i] == '\x00' || buf[i] == '\n') buf[i] = ' '; } memcpy(MESSAGE        , buf + 14, 64);
-    memset(buf, ' ', 128); fgets(buf, 128, fh); for (int i = 0; i < 128; i++) { if (buf[i] == '\x00' || buf[i] == '\n') buf[i] = ' '; } memcpy(THRESHOLD_HSTR , buf + 14, 64);
+    readopt(fh, "MAGIC_BYTES  =", MAGIC_BYTES    , 16);
+    readopt(fh, "USERNAME     =", USERNAME       , 16);
+    readopt(fh, "PREVIOUS_HASH=", PREV_BLOCK_HASH, 64);
+    readopt(fh, "MESSAGE      =", MESSAGE        , 64);
+    readopt(fh, "THRESHOLD    =", THRESHOLD_HSTR , 64);
 
     fclose(fh);
 
@@ -74,6 +95,12 @@ int main(int argc, char *argv[]) {
     sha256_final(&ctx, BLOCK_HASH);
 
     free(pt);
+
+    printf("BLOCK_HASH: ");
+    for (int i = 0; i < SHA256_BLOCK_SIZE; i++)
+        printf("%02x", BLOCK_HASH[i]);
+    printf("\nCheck to make sure that this matches the 'BLOCK HASH' listed");
+    printf(" on the website. If it doesn't, then something has gone wrong!\n\n");
 
     //
     // Now, start mining.
