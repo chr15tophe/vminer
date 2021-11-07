@@ -24,5 +24,9 @@ block = hashlib.sha256(
     MAGIC_BYTES + PREVIOUS_BLOCK_HASH + MESSAGE.ljust(64, b" ")
 ).digest()
 
-if int(hashlib.sha256(block + MINER + NONCE).hexdigest(), 16) < THRESHOLD:
+signature = hashlib.sha256(block + MINER + NONCE).hexdigest()
+if int(signature, 16) < THRESHOLD:
     print(f"Nonce '{sys.argv[3]}' is valid!")
+
+print(f"Signature is {signature}")
+
