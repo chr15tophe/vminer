@@ -95,6 +95,7 @@ int main(int argc, char *argv[]) {
 
     unsigned char *SIGNATURE = calloc(SHA256_BLOCK_SIZE, sizeof(unsigned char));
 
+    int i = 0;
     while (1) {
         // Fill a random nonce.
         for (unsigned char *it = pt + 48; it < pt + 60; ++it) {
@@ -126,6 +127,11 @@ int main(int argc, char *argv[]) {
         return 0;
 
         skip:
+        // Count number of attempts, so far.
+        i++;
+        if (i % 10000000 == 0)
+            printf("INFO: #%d\n", i);
+
         continue;
     }
 }
