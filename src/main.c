@@ -95,6 +95,7 @@ int main(int argc, char *argv[]) {
 
     unsigned char *SIGNATURE = calloc(SHA256_BLOCK_SIZE, sizeof(unsigned char));
 
+    clock_t t1 = clock(), t2;
     int i = 0;
     while (1) {
         // Fill a random nonce.
@@ -129,8 +130,14 @@ int main(int argc, char *argv[]) {
         skip:
         // Count number of attempts, so far.
         i++;
-        if (i % 10000000 == 0)
-            printf("INFO: #%d\n", i);
+        if (i % 10000000 == 0) {
+            t2 = clock();
+            double runtime = (double)(t2 - t1) / CLOCKS_PER_SEC;
+            printf("INFO: Currently averaging %f hashes per second...\n", 10000000.0 / runtime);
+
+
+            t1 = clock();
+        }
 
         continue;
     }
