@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -6,6 +7,8 @@
 #include <assert.h>
 
 #include "sha256.h"
+
+#define HEX2DEC(x) ((((x) ^ 16) + 7) % 39)
 
 // Compile-time constants.
 char *MAGIC_BYTES = "ISVENONACOINBEST";
@@ -18,6 +21,19 @@ struct Args
     char *message;
     uint8_t *threshold;
 };
+
+int error(bool condition, const char *message, unsigned int ln)
+{
+    if (condition)
+    {
+        if (ln >= 0)
+            fprintf(stderr, "ERROR: %s on line %d.\n", message, ln);
+        else
+            fprintf(stderr, "ERROR: %s.\n", message);
+        return 1;
+    }
+    else return 0;
+}
 
 int main(int argc, char *argv[])
 {
@@ -42,7 +58,7 @@ int main(int argc, char *argv[])
 
     args.username = calloc(17, sizeof(char));
     memset(args.username, ' ', 16);
-    memcpy(args.username, argv[1], strlen(argv[1])); 
+    memcpy(args.username, argv[1], strlen(argv[1]));
 
     FILE *fh = fopen(argv[2], "r");
     char buf1[256], buf2[256];
@@ -64,23 +80,12 @@ int main(int argc, char *argv[])
             || sscanf(buf1, " PREVIOUS_BLOCK_HASH = '%64[0123456789ABCDEF]'", buf2) == 1
             || sscanf(buf1, " PREVIOUS_BLOCK_HASH = %64[0123456789ABCDEF]", buf2) == 1)
         {
-            if (args.previous_block_hash != NULL)
-            {
-                fprintf(stderr,
-                    "ERROR: Overwriting PREVIOUS_BLOCK_HASH on line %d.\n", ln);
-                ++errors;
-            }
-
-            if (strlen(buf2) != 64)
-            {
-                fprintf(stderr,
-                    "ERROR: The PREVIOUS_BLOCK_HASH specified on line %d is not 64 bytes long.", ln);
-                ++errors;
-            }
+            errors += error(args.previous_block_hash != NULL, "Overwriting PREVIOUS_BLOCK_HASH", ln);
+            errors += error(strlen(buf2) != 64, "Expected a 64-byte PREVIOUS_BLOCK_HASH", ln);
 
             args.previous_block_hash = calloc(65, sizeof(char));
             memcpy(args.previous_block_hash, buf2, 64);
-        
+
             continue;
         }
 
@@ -89,23 +94,12 @@ int main(int argc, char *argv[])
             sscanf(buf1, " MESSAGE = \"%[^\"]\"", buf2) == 1
             || sscanf(buf1, " MESSAGE = '%[^']'", buf2) == 1)
         {
-            if (args.message != NULL)
-            {
-                fprintf(stderr,
-                    "ERROR: Overwriting MESSAGE on line %d.\n", ln);
-                ++errors;
-            } 
-
-            if (strlen(buf2) > 64)
-            {
-                fprintf(stderr,
-                    "ERROR: The MESSAGE specified on line %d is too long.", ln);
-                ++errors;
-            }
+            errors += error(args.message != NULL, "Overwriting MESSAGE", ln);
+            errors += error(strlen(buf2) > 64, "Got more than 64 byte MESSAGE", ln);
 
             args.message = calloc(65, sizeof(char));
             memset(args.message, ' ', 64);
-            memcpy(args.message, buf2, strlen(buf2)); 
+            memcpy(args.message, buf2, strlen(buf2));
 
             continue;
         }
@@ -116,45 +110,32 @@ int main(int argc, char *argv[])
             || sscanf(buf1, " THRESHOLD = '%64[0123456789ABCDEF]'", buf2) == 1
             || sscanf(buf1, " THRESHOLD = %64[0123456789ABCDEF]", buf2) == 1)
         {
-            if (args.threshold != NULL)
-            {
-                fprintf(stderr,
-                    "ERROR: Overwriting THRESHOLD on line %d.\n", ln);
-                ++errors;
-            }
-
-            if (strlen(buf2) != 64)
-            {
-                fprintf(stderr,
-                    "ERROR: The THRESHOLD specified on line %d is not 64 bytes long.", ln);
-                ++errors;
-            }
+            errors += error(args.threshold != NULL, "Overwriting THRESHOLD", ln);
+            errors += error(strlen(buf2) != 64, "Expected a 64-byte THRESHOLD", ln);
 
             // Convert the hex string to a uint8_t array.
-            char *it = buf2;
             args.threshold = calloc(33, sizeof(uint8_t));
-            for (unsigned int i = 0; i < 32; ++i, it = it + 2)
-                sscanf(it, "%2hhx", &args.threshold[i]);
-            
+            for (unsigned int i = 0; i < 32; ++i)
+                args.threshold[i] = (
+                    16*HEX2DEC(buf2[2*i]) + HEX2DEC(buf2[2*i + 1])
+                );
+
             continue;
         }
 
         // Otherwise, dunno!
-        printf("ERROR: Couldn't parse line %d.\n", ln);
+        errors += error(true, "Parsing error", ln);
         ++errors;
     }
 
     // Check for unspecified arguments.
-    if (args.username            == NULL) { fprintf(stderr, "ERROR: USERNAME is undefined; set it on the command line\n"); }
-    if (args.previous_block_hash == NULL) { fprintf(stderr, "ERROR: PREVIOUS_BLOCK_HASH is undefined; set it in %s.\n", argv[1]); ++errors; }
-    if (args.message             == NULL) { fprintf(stderr, "ERROR: MESSAGE is undefined; set it in %s.\n"            , argv[1]); ++errors; }
-    if (args.threshold           == NULL) { fprintf(stderr, "ERROR: THRESHOLD is undefined; set it in %s.\n"          , argv[1]); ++errors; }
+    errors += error(args.username            == NULL, "USERNAME is undefined; set it on the command line.", -1);
+    errors += error(args.previous_block_hash == NULL, "PREVIOUS_BLOCK_HASH is undefined; set it in your .conf file.", -1);
+    errors += error(args.message             == NULL, "MESSAGE is undefined; set it in your .conf file.", -1);
+    errors += error(args.threshold           == NULL, "THRESHOLD is undefined; set it in your .conf file.", -1);
 
     if (errors > 0)
-    {
-        printf("\nThere were %d fatal errors. Fix them, and then re-run.\n", errors);
-        exit(1);
-    }
+        printf("\nThere were %d fatal errors. Fix them, and then re-run.\n", errors), exit(1);
 
     fprintf(stderr,
         "INFO: Got the following input arguments. Please confirm that they are correct! (note that USERNAME and MESSAGE are both padded with spaces to the appropriate length.)\n");
@@ -165,7 +146,7 @@ int main(int argc, char *argv[])
     for (int i = 0; i < 32; ++i)
         fprintf(stderr, "%02x", args.threshold[i]);
     fprintf(stderr, "\"\n");
-    
+
     //
     // Compute the block hash.
     //
@@ -189,19 +170,20 @@ int main(int argc, char *argv[])
     for (int i = 0; i < 32; ++i)
         fprintf(stderr, "%02x", block_hash[i]);
     fprintf(stderr, "\"\n");
-    
+    fprintf(stderr, "\n");
+
     //
     // Start mining!
-    // 
+    //
 
     time_t t;
     srand((unsigned)time(&t));
-    
+
     pt = calloc(64, sizeof(unsigned char));
     memcpy(pt + 0 , block_hash, SHA256_BLOCK_SIZE);
     memcpy(pt + 32, args.username, 16);
     memcpy(pt + 60, AUTHOR_TOKEN, 4);
-    
+
     for (int i = 0; i < 12; ++i)
         *(pt + 48 + i) = (unsigned char)('a' + (rand() % 26));
 
