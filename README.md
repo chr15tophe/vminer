@@ -4,10 +4,12 @@ A VenonaCoin miner.
 
 ## Usage
 
-First, you'll need to install `gcc` and use it to compile the `vminer` binary;
-the included Makefile should help with that.
+### Windows
 
-Then, create a file called `vminer.conf` and paste 
+You can download `vminer-64.exe` (for 64-bit Windows machines) from the
+Discord.
+
+You'll need to create a file called `vminer.conf` and paste
 
 ```
 PREVIOUS_BLOCK_HASH = "4FD097A91E71DF403E6159FC58C53ECE1A809708549073541912BCBD10C924EA"
@@ -17,5 +19,22 @@ THRESHOLD = "0000020000000000000000000000000000000000000000000000000000000000"
 
 Obviously, you will need to modify those variables to the appropriate values.
 
-Finally, `./bin/vminer "your username" vminer.conf` (or
-`.\bin\vminer.exe "your username" vminer.conf` on Windows) and wait!
+Finally, execute `.\bin\vminer.exe "your username" path/to/vminer.conf`.
+**Don't forget to sanity-check the values that are logged at the start**; if
+something isn't right then something has gone wrong!
+
+### Mac/Linux
+
+Set the `USERNAME` and `REMEMBER_TOKEN` variables in `run.sh` as appropriate
+(`REMEMBER_TOKEN` should be set to the value of the `remember_token` cookie
+on the website.)
+
+Then, execute `./run.sh`. It will automatically `make`, get the values
+associated with the current block, and start mining. **Don't forget to
+sanity-check the values that are logged at the start!**
+
+*Note*: The `REMEMBER_TOKEN` does not have to "agree" with the `USERNAME`; you
+can set someone else's username and your `REMEMBER_TOKEN` to mine VenonaCoin as
+if you were them. The `REMEMBER_TOKEN` is only used to scrape the current
+block hash, message, and threshold from the website.
+
