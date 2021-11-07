@@ -21,10 +21,7 @@ int main(int argc, char *argv[]) {
     //
 
     unsigned char *MAGIC_BYTES     = calloc(16, sizeof(unsigned char));
-
     unsigned char *USERNAME        = calloc(16, sizeof(unsigned char));
-    unsigned char *AUTHOR          = calloc(4 , sizeof(unsigned char));
-
     unsigned char *PREV_BLOCK_HASH = calloc(64, sizeof(unsigned char));
     unsigned char *MESSAGE         = calloc(64, sizeof(unsigned char));
     unsigned char *THRESHOLD_HSTR  = calloc(64, sizeof(unsigned char));
@@ -38,10 +35,7 @@ int main(int argc, char *argv[]) {
     FILE *fh = fopen(argv[1], "r");
 
     memset(buf, ' ', 128); fgets(buf, 128, fh); for (int i = 0; i < 128; i++) { if (buf[i] == '\x00' || buf[i] == '\n') buf[i] = ' '; } memcpy(MAGIC_BYTES    , buf, 16);
-    memset(buf, ' ', 128); fgets(buf, 128, fh);
     memset(buf, ' ', 128); fgets(buf, 128, fh); for (int i = 0; i < 128; i++) { if (buf[i] == '\x00' || buf[i] == '\n') buf[i] = ' '; } memcpy(USERNAME       , buf, 16);
-    memset(buf, ' ', 128); fgets(buf, 128, fh); for (int i = 0; i < 128; i++) { if (buf[i] == '\x00' || buf[i] == '\n') buf[i] = ' '; } memcpy(AUTHOR         , buf, 4 );
-    memset(buf, ' ', 128); fgets(buf, 128, fh);
     memset(buf, ' ', 128); fgets(buf, 128, fh); for (int i = 0; i < 128; i++) { if (buf[i] == '\x00' || buf[i] == '\n') buf[i] = ' '; } memcpy(PREV_BLOCK_HASH, buf, 64);
     memset(buf, ' ', 128); fgets(buf, 128, fh); for (int i = 0; i < 128; i++) { if (buf[i] == '\x00' || buf[i] == '\n') buf[i] = ' '; } memcpy(MESSAGE        , buf, 64);
     memset(buf, ' ', 128); fgets(buf, 128, fh); for (int i = 0; i < 128; i++) { if (buf[i] == '\x00' || buf[i] == '\n') buf[i] = ' '; } memcpy(THRESHOLD_HSTR , buf, 64);
@@ -51,7 +45,6 @@ int main(int argc, char *argv[]) {
     printf("====[ VMiner V1.0.0 ]============================================================\n");
     printf("    MAGIC_BYTES: %s\n", MAGIC_BYTES    );
     printf("       USERNAME: %s\n", USERNAME       );
-    printf("         AUTHOR: %s\n", AUTHOR         );
     printf("PREV_BLOCK_HASH: %s\n", PREV_BLOCK_HASH);
     printf("        MESSAGE: %s\n", MESSAGE        );
     printf("      THRESHOLD: %s\n", THRESHOLD_HSTR );
@@ -91,7 +84,10 @@ int main(int argc, char *argv[]) {
     pt = calloc(64, sizeof(unsigned char));
     memcpy(pt + 0 , BLOCK_HASH, SHA256_BLOCK_SIZE);
     memcpy(pt + 32, USERNAME , 16);
-    memcpy(pt + 60, AUTHOR   , 4);
+    *(pt + 60) = 'Q';
+    *(pt + 61) = 'U';
+    *(pt + 62) = 'X';
+    *(pt + 63) = '5';
 
     unsigned char *SIGNATURE = calloc(SHA256_BLOCK_SIZE, sizeof(unsigned char));
 
@@ -114,17 +110,14 @@ int main(int argc, char *argv[]) {
             if (SIGNATURE[i] >  THRESHOLD[i]) goto skip;
         }
 
-        printf("INFO: Found a valid nonce!\n");
+        printf("\nINFO: Found a valid nonce,\n\n    ");
         for (unsigned char *it = pt + 48; it < pt + 64; ++it)
             printf("%c", *it);
-        printf("\n");
-
-#ifdef DEBUG
-        printf("DEBUG: This produces a signature\n");
+        printf("\n\nThis produces a signature hash of ");
         for (int i = 0; i < SHA256_BLOCK_SIZE; i++)
             printf("%02x", SIGNATURE[i]);
-        printf("\n");
-#endif
+        printf(".\n");
+
         return 0;
 
         skip:
