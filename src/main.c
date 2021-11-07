@@ -183,15 +183,18 @@ int main(int argc, char *argv[])
     memcpy(pt + 0 , block_hash, SHA256_BLOCK_SIZE);
     memcpy(pt + 32, args.username, 16);
     memcpy(pt + 60, AUTHOR_TOKEN, 4);
-
-    for (int i = 0; i < 12; ++i)
-        *(pt + 48 + i) = (unsigned char)('a' + (rand() % 26));
+    
+    // Initialize the nonce with a random value.
+    for (int j = 0; j < 12; ++j)
+        *(pt + 48 + j) = (unsigned char)('a' + (rand() % 26));
 
     clock_t t1 = clock(), t2;
-    int i = 0;
+    uint64_t no = 0;
     while (1) {
         // Modify the nonce, slightly.
-        *(pt + 48 + (i % 12)) = (unsigned char)('a' + (rand() % 26));
+        *(pt + 48 + ((no + 0) % 12)) = (unsigned char)('a' + (rand() % 26));
+        *(pt + 48 + ((no + 2) % 12)) = (unsigned char)('a' + (rand() % 26));
+        *(pt + 48 + ((no + 4) % 12)) = (unsigned char)('a' + (rand() % 26));
 
         sha256_init(&ctx);
         sha256_update(&ctx, pt, 64);
@@ -216,11 +219,11 @@ int main(int argc, char *argv[])
 
         skip:
         // Count number of attempts, so far.
-        i++;
-        if (i % 10000000 == 0) {
+        no++;
+        if (no % 10000000 == 0) {
             t2 = clock();
             double runtime = (double)(t2 - t1) / CLOCKS_PER_SEC;
-            printf("INFO: Currently averaging %f hashes per second...\n", 10000000.0 / runtime);
+            printf("INFO: Currently ~%f h/s; %ld total so far...\n", 10000000.0 / runtime, no);
 
             t1 = clock();
         }
