@@ -25,7 +25,9 @@ void readopt(FILE *fh, const char *prefix, unsigned char *dest, int size) {
 
     // Check to make sure that the prefix matches the expected value.
     if (memcmp(prefix, buf, strlen(prefix)) != 0) {
-        printf("WARN: Your configuration file is in an unexpected format.");
+        printf("WARN: Your configuration file is in an unexpected format.\n");
+        printf("      Expected to see %s..., but instead saw %s.\n", prefix, buf);
+        exit(1);
     }
 
     memcpy(dest, buf + strlen(prefix), size);
