@@ -238,7 +238,7 @@ int main(int argc, char *argv[])
         if (no % 10000000 == 0) {
             t2 = clock();
             double runtime = (double)(t2 - t1) / CLOCKS_PER_SEC;
-            printf("INFO: Currently ~%f h/s; %ld total so far...\n", 10000000.0 / runtime, no);
+            printf("INFO: Currently averaging ~%f h/s...\n", 10000000.0 / runtime);
 
             t1 = clock();
         }
