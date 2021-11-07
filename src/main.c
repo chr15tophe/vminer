@@ -34,11 +34,11 @@ int main(int argc, char *argv[]) {
 
     FILE *fh = fopen(argv[1], "r");
 
-    memset(buf, ' ', 128); fgets(buf, 128, fh); for (int i = 0; i < 128; i++) { if (buf[i] == '\x00' || buf[i] == '\n') buf[i] = ' '; } memcpy(MAGIC_BYTES    , buf, 16);
-    memset(buf, ' ', 128); fgets(buf, 128, fh); for (int i = 0; i < 128; i++) { if (buf[i] == '\x00' || buf[i] == '\n') buf[i] = ' '; } memcpy(USERNAME       , buf, 16);
-    memset(buf, ' ', 128); fgets(buf, 128, fh); for (int i = 0; i < 128; i++) { if (buf[i] == '\x00' || buf[i] == '\n') buf[i] = ' '; } memcpy(PREV_BLOCK_HASH, buf, 64);
-    memset(buf, ' ', 128); fgets(buf, 128, fh); for (int i = 0; i < 128; i++) { if (buf[i] == '\x00' || buf[i] == '\n') buf[i] = ' '; } memcpy(MESSAGE        , buf, 64);
-    memset(buf, ' ', 128); fgets(buf, 128, fh); for (int i = 0; i < 128; i++) { if (buf[i] == '\x00' || buf[i] == '\n') buf[i] = ' '; } memcpy(THRESHOLD_HSTR , buf, 64);
+    memset(buf, ' ', 128); fgets(buf, 128, fh); for (int i = 0; i < 128; i++) { if (buf[i] == '\x00' || buf[i] == '\n') buf[i] = ' '; } memcpy(MAGIC_BYTES    , buf + 14, 16);
+    memset(buf, ' ', 128); fgets(buf, 128, fh); for (int i = 0; i < 128; i++) { if (buf[i] == '\x00' || buf[i] == '\n') buf[i] = ' '; } memcpy(USERNAME       , buf + 14, 16);
+    memset(buf, ' ', 128); fgets(buf, 128, fh); for (int i = 0; i < 128; i++) { if (buf[i] == '\x00' || buf[i] == '\n') buf[i] = ' '; } memcpy(PREV_BLOCK_HASH, buf + 14, 64);
+    memset(buf, ' ', 128); fgets(buf, 128, fh); for (int i = 0; i < 128; i++) { if (buf[i] == '\x00' || buf[i] == '\n') buf[i] = ' '; } memcpy(MESSAGE        , buf + 14, 64);
+    memset(buf, ' ', 128); fgets(buf, 128, fh); for (int i = 0; i < 128; i++) { if (buf[i] == '\x00' || buf[i] == '\n') buf[i] = ' '; } memcpy(THRESHOLD_HSTR , buf + 14, 64);
 
     fclose(fh);
 
@@ -89,15 +89,18 @@ int main(int argc, char *argv[]) {
     *(pt + 62) = 'X';
     *(pt + 63) = '5';
 
+    // Fill a random nonce.
+    for (unsigned char *it = pt + 48; it < pt + 60; ++it) {
+        *it = (unsigned char)('a' + (rand() % 26));
+    }
+
     unsigned char *SIGNATURE = calloc(SHA256_BLOCK_SIZE, sizeof(unsigned char));
 
     clock_t t1 = clock(), t2;
     int i = 0;
     while (1) {
-        // Fill a random nonce.
-        for (unsigned char *it = pt + 48; it < pt + 60; ++it) {
-            *it = (unsigned char)('a' + (rand() % 26));
-        }
+        // Modify the current nonce, slightly.
+        *(pt + 48 + (i % 12)) = (unsigned char)('a' + (rand() % 26));
 
         sha256_init(&ctx);
         sha256_update(&ctx, pt, 64);
