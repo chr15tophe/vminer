@@ -2,31 +2,30 @@
 # This little script will quickly and easily verify a nonce.
 
 import hashlib
-import sys
 
-if len(sys.argv) != 4:
-    print(f"usage: {sys.argv[0]} <username> <vminer.conf> <nonce>")
-    exit()
+NONCES = b"""
+INFO: Starting attack at 867Ig0LVTS08QUX5.
+SUCCESS: Found nonce 867Ig0LW6rowQUX5.
+INFO: Currently averaging ~2447057.303475 h/s...
+SUCCESS: Found nonce 867Ig0LWISAmQUX5.
+INFO: Currently averaging ~2474921.006709 h/s...
+SUCCESS: Found nonce 867Ig0LXB85aQUX5.
+SUCCESS: Found nonce 867Ig0LXBG1oQUX5.
+INFO: Currently averaging ~2484438.100846 h/s...
+""".split(b"\n")
 
-with open(sys.argv[2], "r") as fh:
-    exec(fh.read()) # Don't do this, this is dumb.
+BLOCK_HASH = bytes.fromhex("D32DD2A70420219F42DAE0EB9E091CA8606D47B1A3EBB7DDB5A35B9220ACB169")
+MINER = (b"hugh").ljust(16, b" ")
+THRESHOLD = 0x0000020000000000000000000000000000000000000000000000000000000000
 
-MAGIC_BYTES = b"ISVENONACOINBEST"
-MINER = sys.argv[1].encode().ljust(16, b' ')
-PREVIOUS_BLOCK_HASH = PREVIOUS_BLOCK_HASH.encode()
-MESSAGE = MESSAGE.encode().ljust(64, b' ')
-THRESHOLD = int(THRESHOLD, 16)
-NONCE = sys.argv[3].encode()
+for NONCE in NONCES:
+    if b"SUCCESS: Found nonce" not in NONCE:
+        continue
 
-# Calculate the block signature.
+    NONCE = NONCE.split(b" ")[3][:-1]
 
-block = hashlib.sha256(
-    MAGIC_BYTES + PREVIOUS_BLOCK_HASH + MESSAGE.ljust(64, b" ")
-).digest()
-
-signature = hashlib.sha256(block + MINER + NONCE).hexdigest()
-if int(signature, 16) < THRESHOLD:
-    print(f"Nonce '{sys.argv[3]}' is valid!")
-
-print(f"Signature is {signature}")
-
+    signature = hashlib.sha256(BLOCK_HASH + MINER + NONCE).hexdigest()
+    if int(signature, 16) < THRESHOLD:
+        print(f"Nonce '{NONCE.decode()}' is valid!")
+    else:
+        print(f"Nonce '{NONCE.decode()}' is valid!")

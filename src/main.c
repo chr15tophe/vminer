@@ -1,259 +1,230 @@
+// main.c
+// Copyright (c) 2021.
+
+/**
+ * vminer [v2.0.0]
+ * A VenonaCoin miner.
+ */
+
 #include <stdlib.h>
-#include <stdbool.h>
 #include <stdint.h>
+#include <inttypes.h>
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
-#include <assert.h>
 
-#include "sha256.h"
+#define ROR32(a,b) (((a) >> (b)) | ((a) << (32-(b))))
+#define CH(x,y,z) (((x) & (y)) ^ (~(x) & (z)))
+#define MAJ(x,y,z) (((x) & (y)) ^ ((x) & (z)) ^ ((y) & (z)))
+#define EP0(x) (ROR32(x,2) ^ ROR32(x,13) ^ ROR32(x,22))
+#define EP1(x) (ROR32(x,6) ^ ROR32(x,11) ^ ROR32(x,25))
+#define SIG0(x) (ROR32(x,7) ^ ROR32(x,18) ^ ((x) >> 3))
+#define SIG1(x) (ROR32(x,17) ^ ROR32(x,19) ^ ((x) >> 10))
 
 #define HEX2DEC(x) ((((x) ^ 16) + 7) % 39)
 
-// Compile-time constants.
-char *CHARSET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-int CHARSET_SIZE = 62;
-
-char *MAGIC_BYTES = "ISVENONACOINBEST";
-char *AUTHOR_TOKEN = "QUX5";
-
-struct Args
-{
-    char *username;
-    char *previous_block_hash;
-    char *message;
-    uint8_t *threshold;
+static const uint32_t k[64] = {
+	0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+	0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+	0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+	0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+	0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+	0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+	0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+	0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
 };
 
-int error(bool condition, const char *message, unsigned int ln)
-{
-    if (condition)
-    {
-        if (ln >= 0)
-            fprintf(stderr, "ERROR: %s on line %d.\n", message, ln);
-        else
-            fprintf(stderr, "ERROR: %s.\n", message);
-        return 1;
-    }
-    else return 0;
-}
+static const uint32_t w1[64] = {
+    0x80000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
+    0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000200,
+    0x80000000, 0x01400000, 0x00205000, 0x00005088, 0x22000800, 0x22550014, 0x05089742, 0xa0000020,
+    0x5a880000, 0x005c9400, 0x0016d49d, 0xfa801f00, 0xd33225d0, 0x11675959, 0xf6e6bfda, 0xb30c1549,
+    0x08b2b050, 0x9d7c4c27, 0x0ce2a393, 0x88e6e1ea, 0xa52b4335, 0x67a16f49, 0xd732016f, 0x4eeb2e91,
+    0x5dbf55e5, 0x8eee2335, 0xe2bc5ec2, 0xa83f4394, 0x45ad78f7, 0x36f3d0cd, 0xd99c05e8, 0xb0511dc7,
+    0x69bc7ac4, 0xbd11375b, 0xe3ba71e5, 0x3b209ff2, 0x18feee17, 0xe25ad9e7, 0x13375046, 0x0515089d,
+    0x4f0d0f04, 0x2627484e, 0x310128d2, 0xc668b434, 0x420841cc, 0x62d311b8, 0xe59ba771, 0x85a7a484,
+};
+
+static const uint8_t *CHARSET =
+    (uint8_t *)"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+static const size_t CHARSET_SIZE = 62;
 
 int main(int argc, char *argv[])
 {
-    assert(16 == strlen(MAGIC_BYTES ));
-    assert( 4 == strlen(AUTHOR_TOKEN));
-
-    if (argc != 3)
+    if (argc != 4)
     {
-        printf("usage: %s <username> <vminer.conf>\n", argv[0]);
-        return 1;
+        fprintf(stderr, "usage: %s <block hash> <username> <threshold>\n", argv[0]);
+        return EXIT_FAILURE;
     }
 
-    //
-    // Parse arguments from .conf file.
-    //
+    size_t i, j;
 
-    struct Args args;
-    args.username               = NULL;
-    args.previous_block_hash    = NULL;
-    args.message                = NULL;
-    args.threshold              = NULL;
+    // Setup m.
+    uint8_t m[128];
+    memset(m, 0, 128);
 
-    args.username = calloc(17, sizeof(char));
-    memset(args.username, ' ', 16);
-    memcpy(args.username, argv[1], strlen(argv[1]));
-
-    FILE *fh = fopen(argv[2], "r");
-    char buf1[256], buf2[256];
-    unsigned int ln = 0;
-    unsigned int errors = 0;
-
-    while (fgets(buf1, sizeof(buf1), fh))
+    // Get `block hash` argument.
+    if (strlen(argv[1]) != 64)
     {
-        ++ln;
-
-        // Skip blank lines and comments (which are lines that begin with
-        // octothorpes,) we don't need them.
-        if (sscanf(buf1, " %s", buf2) == EOF) continue;
-        if (sscanf(buf1, " %[#]", buf2) == 1) continue;
-
-        // Get PREVIOUS_BLOCK_HASH.
-        if (
-            sscanf(buf1, " PREVIOUS_BLOCK_HASH = \"%64[0123456789ABCDEF]\"", buf2) == 1
-            || sscanf(buf1, " PREVIOUS_BLOCK_HASH = '%64[0123456789ABCDEF]'", buf2) == 1
-            || sscanf(buf1, " PREVIOUS_BLOCK_HASH = %64[0123456789ABCDEF]", buf2) == 1)
-        {
-            errors += error(args.previous_block_hash != NULL, "Overwriting PREVIOUS_BLOCK_HASH", ln);
-            errors += error(strlen(buf2) != 64, "Expected a 64-byte PREVIOUS_BLOCK_HASH", ln);
-
-            args.previous_block_hash = calloc(65, sizeof(char));
-            memcpy(args.previous_block_hash, buf2, 64);
-
-            continue;
-        }
-
-        // Get MESSAGE.
-        if (
-            sscanf(buf1, " MESSAGE = \"%[^\"]\"", buf2) == 1
-            || sscanf(buf1, " MESSAGE = '%[^']'", buf2) == 1)
-        {
-            errors += error(args.message != NULL, "Overwriting MESSAGE", ln);
-            errors += error(strlen(buf2) > 64, "Got more than 64 byte MESSAGE", ln);
-
-            args.message = calloc(65, sizeof(char));
-            memset(args.message, ' ', 64);
-            memcpy(args.message, buf2, strlen(buf2));
-
-            continue;
-        }
-
-        // Get THRESHOLD.
-        if (
-            sscanf(buf1, " THRESHOLD = \"%64[0123456789ABCDEF]\"", buf2) == 1
-            || sscanf(buf1, " THRESHOLD = '%64[0123456789ABCDEF]'", buf2) == 1
-            || sscanf(buf1, " THRESHOLD = %64[0123456789ABCDEF]", buf2) == 1)
-        {
-            errors += error(args.threshold != NULL, "Overwriting THRESHOLD", ln);
-            errors += error(strlen(buf2) != 64, "Expected a 64-byte THRESHOLD", ln);
-
-            // Convert the hex string to a uint8_t array.
-            args.threshold = calloc(33, sizeof(uint8_t));
-            for (unsigned int i = 0; i < 32; ++i)
-                args.threshold[i] = (
-                    16*HEX2DEC(buf2[2*i]) + HEX2DEC(buf2[2*i + 1])
-                );
-
-            continue;
-        }
-
-        // Otherwise, dunno!
-        errors += error(true, "Parsing error", ln);
-        ++errors;
+        fprintf(stderr, "PANIC: `block hash` argument should be 64 uppercase hex characters.\n");
+        return EXIT_FAILURE;
     }
+    for (i = 0; i < 32; ++i)
+        m[i] = (
+            16*HEX2DEC(argv[1][2*i]) + HEX2DEC(argv[1][2*i + 1])
+        );
 
-    // Check for unspecified arguments.
-    errors += error(args.username            == NULL, "USERNAME is undefined; set it on the command line.", -1);
-    errors += error(args.previous_block_hash == NULL, "PREVIOUS_BLOCK_HASH is undefined; set it in your .conf file.", -1);
-    errors += error(args.message             == NULL, "MESSAGE is undefined; set it in your .conf file.", -1);
-    errors += error(args.threshold           == NULL, "THRESHOLD is undefined; set it in your .conf file.", -1);
+    // Get `username` argument.
+    if (strlen(argv[2]) > 16)
+    {
+        fprintf(stderr, "PANIC: `username` argument is too long!\n");
+        return EXIT_FAILURE;
+    }
+    memset(m + 32, ' ', 16);
+    memcpy(m + 32, argv[2], strlen(argv[2]));
 
-    if (errors > 0)
-        printf("\nThere were %d fatal errors. Fix them, and then re-run.\n", errors), exit(1);
+    // Set miner token.
+    memset(m + 48, '_', 16);
+    m[60] = 'Q';
+    m[61] = 'U';
+    m[62] = 'X';
+    m[63] = '5';
 
-    fprintf(stderr,
-        "INFO: Got the following input arguments. Please confirm that they are correct! (note that USERNAME and MESSAGE are both padded with spaces to the appropriate length.)\n");
-    fprintf(stderr, " - USERNAME = \"%s\"\n", args.username);
-    fprintf(stderr, " - PREVIOUS_BLOCK_HASH = \"%s\"\n", args.previous_block_hash);
-    fprintf(stderr, " - MESSAGE = \"%s\"\n", args.message);
-    fprintf(stderr, " - THRESHOLD = \"");
-    for (int i = 0; i < 32; ++i)
-        fprintf(stderr, "%02x", args.threshold[i]);
-    fprintf(stderr, "\"\n");
+    // Set additional bytes for SHA256.
+    m[64] = 0x80;
+    m[126] = 0x02;
 
-    //
-    // Compute the block hash.
-    //
+    // Get `threshold` argument.
+    uint32_t threshold[8];
+    if (strlen(argv[3]) != 64)
+    {
+        fprintf(stderr, "PANIC: `threshold` argument should be 64 uppercase hex characters.\n");
+        return EXIT_FAILURE;
+    }
+    for (i = 0; i < 8; ++i)
+        threshold[i] = (
+              ((uint32_t)(HEX2DEC(argv[3][8*i + 0])) << 28)
+            + ((uint32_t)(HEX2DEC(argv[3][8*i + 1])) << 24)
+            + ((uint32_t)(HEX2DEC(argv[3][8*i + 2])) << 20)
+            + ((uint32_t)(HEX2DEC(argv[3][8*i + 3])) << 16)
+            + ((uint32_t)(HEX2DEC(argv[3][8*i + 4])) << 12)
+            + ((uint32_t)(HEX2DEC(argv[3][8*i + 5])) << 8)
+            + ((uint32_t)(HEX2DEC(argv[3][8*i + 6])) << 4)
+            + ((uint32_t)(HEX2DEC(argv[3][8*i + 7])) << 0)
+        );
 
-    SHA256_CTX ctx;
-
-    unsigned char *pt = calloc(144, sizeof(unsigned char));
-    memcpy(pt + 0 , MAGIC_BYTES             , 16);
-    memcpy(pt + 16, args.previous_block_hash, 64);
-    memcpy(pt + 80, args.message            , 64);
-
-    uint8_t *block_hash = calloc(SHA256_BLOCK_SIZE, sizeof(uint8_t));
-
-    sha256_init(&ctx);
-    sha256_update(&ctx, pt, 144);
-    sha256_final(&ctx, block_hash);
-
-    free(pt);
-
-    fprintf(stderr, " - BLOCK_HASH = \"");
-    for (int i = 0; i < 32; ++i)
-        fprintf(stderr, "%02x", block_hash[i]);
-    fprintf(stderr, "\"\n");
-    fprintf(stderr, "\n");
-
-    //
-    // Start mining!
-    //
-
+    // Pick a starting nonce.
     time_t t;
     srand((unsigned)time(&t));
 
-    pt = calloc(65, sizeof(unsigned char));
-    memcpy(pt + 0 , block_hash, SHA256_BLOCK_SIZE);
-    memcpy(pt + 32, args.username, 16);
-    memcpy(pt + 60, AUTHOR_TOKEN, 4);
-    
-    uint8_t *nonce = calloc(12, sizeof(uint8_t));
-    
-    // Initialize the nonce with a random value.
-    for (int i = 0; i < 12; ++i) {
-        nonce[i] = rand() % CHARSET_SIZE;
-        *(pt + 48 + i) = CHARSET[nonce[i]];
-    }
-    
-    printf("INFO: Initializing nonce at %s.\n", pt + 48);
- 
-    clock_t t1 = clock(), t2;
-    uint64_t no = 0;
-    while (1) {
+    uint8_t nonce[12];
+    for (i = 0; i < 12; ++i)
+        nonce[i] = rand() % CHARSET_SIZE, m[48 + i] = CHARSET[nonce[i]];
+
+    printf("INFO: Starting attack at ");
+    for (i = 0; i < 16; ++i)
+        printf("%c", m[48 + i]);
+    printf(".\n");
+
+    clock_t c1 = clock(), c2;
+    for (uint64_t no = 1;; ++no)
+    {
         // Increment the nonce.
-        for (int i = 11; i >= 0; --i) {
+        for (i = 11; i >= 0; --i)
+        {
             nonce[i] = (nonce[i] + 1) % CHARSET_SIZE;
-            *(pt + 48 + i) = CHARSET[nonce[i]];
+            m[48 + i] = CHARSET[nonce[i]];
             if (nonce[i])
                 break;
         }
 
-        sha256_init(&ctx);
-        sha256_update(&ctx, pt, 64);
-        sha256_final(&ctx, block_hash);
+        // Now, calculate the digest!
+        uint32_t h0 = 0x6a09e667,
+            h1 = 0xbb67ae85,
+            h2 = 0x3c6ef372,
+            h3 = 0xa54ff53a,
+            h4 = 0x510e527f,
+            h5 = 0x9b05688c,
+            h6 = 0x1f83d9ab,
+            h7 = 0x5be0cd19;
+        uint32_t a, b, c, d, e, f, g, h;
+        uint32_t t1, t2;
+        uint32_t w0[64];
 
-        // Is it small enough?
-        int i;
-        for (i = 0; i < SHA256_BLOCK_SIZE; i++) {
-            if (block_hash[i] == args.threshold[i]) continue;
-            if (block_hash[i] <  args.threshold[i]) break;
-            if (block_hash[i] >  args.threshold[i]) goto skip;
+        // Chunk 0
+        for (i = 0, j = 0; i < 16; ++i, j = j + 4)
+		    w0[i] = (m[j] << 24) | (m[j + 1] << 16) | (m[j + 2] << 8) | (m[j + 3]);
+        for (; i < 64; ++i)
+		    w0[i] = SIG1(w0[i - 2]) + w0[i - 7] + SIG0(w0[i - 15]) + w0[i - 16];
+
+        a = 0x6a09e667;
+        b = 0xbb67ae85;
+        c = 0x3c6ef372;
+        d = 0xa54ff53a;
+        e = 0x510e527f;
+        f = 0x9b05688c;
+        g = 0x1f83d9ab;
+        h = 0x5be0cd19;
+
+        for (i = 0; i < 64; ++i)
+        {
+            t1 = h + EP1(e) + CH(e, f, g) + k[i] + w0[i];
+            t2 = EP0(a) + MAJ(a, b, c);
+            h = g;
+            g = f;
+            f = e;
+            e = d + t1;
+            d = c;
+            c = b;
+            b = a;
+            a = t1 + t2;
+	    }
+
+        h0 += a; h1 += b; h2 += c; h3 += d; h4 += e; h5 += f; h6 += g; h7 += h;
+
+        // Chunk 1
+        a = h0; b = h1; c = h2; d = h3; e = h4; f = h5; g = h6; h = h7;
+
+        for (i = 0; i < 64; ++i) {
+            t1 = h + EP1(e) + CH(e, f, g) + k[i] + w1[i];
+            t2 = EP0(a) + MAJ(a, b, c);
+            h = g;
+            g = f;
+            f = e;
+            e = d + t1;
+            d = c;
+            c = b;
+            b = a;
+            a = t1 + t2;
         }
 
-        // If it is, calculate the percentage of the threshold.
-        int numerator = (
-            ((int)block_hash[i] << 16) + ((int)block_hash[i + 1] << 8) + (int)block_hash[i + 2]
-        );
-        int denominator = (
-            ((int)args.threshold[i] << 16) + ((int)args.threshold[i + 1] << 8) + (int)args.threshold[i + 2]
-        );
-        double percentage = (double)numerator * 100.0 / (double)denominator;
+        h0 += a; h1 += b; h2 += c; h3 += d; h4 += e; h5 += f; h6 += g; h7 += h;
 
-        if (percentage < 50) {
-            printf("INFO: Found a nonce %s, but was only %f%% of the search space.", pt + 48, percentage);
-            goto skip;
-        }
-       
-        printf("\nSUCCESS: Found a valid nonce,\n\n    ");
-        for (unsigned char *it = pt + 48; it < pt + 64; ++it)
-            printf("%c", *it);
-        printf("\n\nThis produces a signature hash of ");
-        for (int i = 0; i < SHA256_BLOCK_SIZE; i++)
-            printf("%02x", block_hash[i]);
-        printf(", which is %f%% of the threshold.\n", percentage);
+        // Now, check if it's less than the threshold.
+        if (h0 > threshold[0]) goto reject;
+        if (h0 < threshold[0]) goto accept;
+        if (h1 > threshold[1]) goto reject;
+        if (h1 < threshold[1]) goto accept;
+        if (h2 > threshold[2]) goto reject;
+        if (h2 < threshold[2]) goto accept;
+        if (h3 > threshold[3]) goto reject;
+        if (h3 < threshold[3]) goto accept;
 
-        if (percentage > 85)
-            return 0;
+        accept:
+        printf("SUCCESS: Found nonce ");
+        for (i = 0; i < 16; ++i)
+            printf("%c", m[48 + i]);
+        printf(".\n");
 
-        skip:
-        // Count number of attempts, so far.
-        no++;
+        reject:
         if (no % 10000000 == 0) {
-            t2 = clock();
-            double runtime = (double)(t2 - t1) / CLOCKS_PER_SEC;
+            c2 = clock();
+            double runtime = (double)(c2 - c1) / CLOCKS_PER_SEC;
             printf("INFO: Currently averaging ~%f h/s...\n", 10000000.0 / runtime);
 
-            t1 = clock();
+            c1 = clock();
         }
     }
+
+    return EXIT_SUCCESS;
 }
