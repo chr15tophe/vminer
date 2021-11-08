@@ -9,19 +9,7 @@ A VenonaCoin miner.
 You can download the latest version of the miner (for 64-bit Windows machines)
 from the [Releases](https://github.com/bcgeocaching/vminer/releases) section.
 
-Before you start mining, you'll need to create a file called `vminer.conf`
-that looks something like this:
-
-```
-PREVIOUS_BLOCK_HASH = "4FD097A91E71DF403E6159FC58C53ECE1A809708549073541912BCBD10C924EA"
-MESSAGE = "IS GENESIS BLOCK VENONA. ARE WISHING FOR ALL GOOD LUCK."
-THRESHOLD = "0000020000000000000000000000000000000000000000000000000000000000"
-```
-
-(Obviously, you will need to modify the variables to the appropriate values for
-the current block.)
-
-Finally, execute `.\vminerX-X-X_64.exe "your username" path/to/vminer.conf`.
+Finally, execute `.\vminerX-X-X_64.exe "previous hash" "your username" "threshold"
 **Don't forget to sanity-check the values that are logged at the start**; if
 something doesn't look right then something has gone wrong!
 

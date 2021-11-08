@@ -198,17 +198,14 @@ int main(int argc, char *argv[])
             a = t1 + t2;
         }
 
-        h0 += a; h1 += b; h2 += c; h3 += d; h4 += e; h5 += f; h6 += g; h7 += h;
-
         // Now, check if it's less than the threshold.
-        if (h0 > threshold[0]) goto reject;
-        if (h0 < threshold[0]) goto accept;
-        if (h1 > threshold[1]) goto reject;
-        if (h1 < threshold[1]) goto accept;
-        if (h2 > threshold[2]) goto reject;
-        if (h2 < threshold[2]) goto accept;
-        if (h3 > threshold[3]) goto reject;
-        if (h3 < threshold[3]) goto accept;
+        if (h0+a > threshold[0]) goto reject;
+        if (h0+a < threshold[0]) goto accept;
+        if (h1+b > threshold[1]) goto reject;
+        if (h1+b < threshold[1]) goto accept;
+        if (h2+c > threshold[2]) goto reject;
+        if (h2+c < threshold[2]) goto accept;
+        if (h3+d > threshold[3]) goto reject;
 
         accept:
         printf("SUCCESS: Found nonce ");
