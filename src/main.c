@@ -60,8 +60,8 @@ int main(int argc, char *argv[])
     size_t i, j;
 
     // Setup m.
-    uint8_t m[128];
-    memset(m, 0, 128);
+    uint8_t m[64];
+    memset(m, ' ', 64);
 
     // Get `block hash` argument.
     if (strlen(argv[1]) != 64)
@@ -80,7 +80,6 @@ int main(int argc, char *argv[])
         fprintf(stderr, "PANIC: `username` argument is too long!\n");
         return EXIT_FAILURE;
     }
-    memset(m + 32, ' ', 16);
     memcpy(m + 32, argv[2], strlen(argv[2]));
 
     // Set miner token.
@@ -89,10 +88,6 @@ int main(int argc, char *argv[])
     m[61] = 'U';
     m[62] = 'X';
     m[63] = '5';
-
-    // Set additional bytes for SHA256.
-    m[64] = 0x80;
-    m[126] = 0x02;
 
     // Get `threshold` argument.
     uint32_t threshold[8];
