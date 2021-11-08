@@ -60,8 +60,8 @@ int main(int argc, char *argv[])
     size_t i, j;
 
     // Setup m.
-    uint8_t m[128];
-    memset(m, 0, 128);
+    uint8_t m[64];
+    memset(m, ' ', 64);
 
     // Get `block hash` argument.
     if (strlen(argv[1]) != 64)
@@ -80,7 +80,6 @@ int main(int argc, char *argv[])
         fprintf(stderr, "PANIC: `username` argument is too long!\n");
         return EXIT_FAILURE;
     }
-    memset(m + 32, ' ', 16);
     memcpy(m + 32, argv[2], strlen(argv[2]));
 
     // Set miner token.
@@ -90,17 +89,18 @@ int main(int argc, char *argv[])
     m[62] = 'X';
     m[63] = '5';
 
-    // Set additional bytes for SHA256.
-    m[64] = 0x80;
-    m[126] = 0x02;
-
     // Get `threshold` argument.
-    uint32_t threshold[8];
     if (strlen(argv[3]) != 64)
     {
         fprintf(stderr, "PANIC: `threshold` argument should be 64 uppercase hex characters.\n");
         return EXIT_FAILURE;
     }
+
+    uint32_t threshold[8];
+    char buf[40] = "0x";
+    strncat(buf, argv[3], 32);
+    long double ldthreshold = strtold(buf, NULL);
+
     for (i = 0; i < 8; ++i)
         threshold[i] = (
               ((uint32_t)(HEX2DEC(argv[3][8*i + 0])) << 28)
@@ -198,20 +198,25 @@ int main(int argc, char *argv[])
             a = t1 + t2;
         }
 
+        h0 += a; h1 += b; h2 += c; h3 += d;
+
         // Now, check if it's less than the threshold.
-        if (h0+a > threshold[0]) goto reject;
-        if (h0+a < threshold[0]) goto accept;
-        if (h1+b > threshold[1]) goto reject;
-        if (h1+b < threshold[1]) goto accept;
-        if (h2+c > threshold[2]) goto reject;
-        if (h2+c < threshold[2]) goto accept;
-        if (h3+d > threshold[3]) goto reject;
+        if (h0 > threshold[0]) goto reject;
+        if (h0 < threshold[0]) goto accept;
+        if (h1 > threshold[1]) goto reject;
+        if (h1 < threshold[1]) goto accept;
+        if (h2 > threshold[2]) goto reject;
+        if (h2 < threshold[2]) goto accept;
+        if (h3 > threshold[3]) goto reject;
 
         accept:
         printf("SUCCESS: Found nonce ");
         for (i = 0; i < 16; ++i)
             printf("%c", m[48 + i]);
-        printf(".\n");
+
+		sprintf(buf, "0x%x%x%x%x", h0, h1, h2, h3);
+   		long double ldhash = strtold(buf, NULL);
+   		printf(". Percentage of threshold: %.0Lf%%\n", ldhash*100/ldthreshold);
 
         reject:
         if (no % 10000000 == 0) {
