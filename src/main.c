@@ -161,7 +161,7 @@ int main(int argc, char *argv[])
     memcpy(pt + 16, args.previous_block_hash, 64);
     memcpy(pt + 80, args.message            , 64);
 
-    unsigned char *block_hash = calloc(SHA256_BLOCK_SIZE, sizeof(unsigned char));
+    uint8_t *block_hash = calloc(SHA256_BLOCK_SIZE, sizeof(uint8_t));
 
     sha256_init(&ctx);
     sha256_update(&ctx, pt, 144);
@@ -182,7 +182,7 @@ int main(int argc, char *argv[])
     time_t t;
     srand((unsigned)time(&t));
 
-    pt = calloc(64, sizeof(unsigned char));
+    pt = calloc(65, sizeof(unsigned char));
     memcpy(pt + 0 , block_hash, SHA256_BLOCK_SIZE);
     memcpy(pt + 32, args.username, 16);
     memcpy(pt + 60, AUTHOR_TOKEN, 4);
@@ -195,10 +195,7 @@ int main(int argc, char *argv[])
         *(pt + 48 + i) = CHARSET[nonce[i]];
     }
     
-    printf("INFO: Initializing nonce at ");
-    for (unsigned char *it = pt + 48; it < pt + 64; ++it)
-        printf("%c", *it);
-    printf("\n");
+    printf("INFO: Initializing nonce at %s.\n", pt + 48);
  
     clock_t t1 = clock(), t2;
     uint64_t no = 0;
@@ -216,21 +213,37 @@ int main(int argc, char *argv[])
         sha256_final(&ctx, block_hash);
 
         // Is it small enough?
-        for (int i = 0; i < SHA256_BLOCK_SIZE; i++) {
+        int i;
+        for (i = 0; i < SHA256_BLOCK_SIZE; i++) {
             if (block_hash[i] == args.threshold[i]) continue;
             if (block_hash[i] <  args.threshold[i]) break;
             if (block_hash[i] >  args.threshold[i]) goto skip;
         }
 
+        // If it is, calculate the percentage of the threshold.
+        int numerator = (
+            ((int)block_hash[i] << 16) + ((int)block_hash[i + 1] << 8) + (int)block_hash[i + 2]
+        );
+        int denominator = (
+            ((int)args.threshold[i] << 16) + ((int)args.threshold[i + 1] << 8) + (int)args.threshold[i + 2]
+        );
+        double percentage = (double)numerator * 100.0 / (double)denominator;
+
+        if (percentage < 50) {
+            printf("INFO: Found a nonce %s, but was only %f%% of the search space.", pt + 48, percentage);
+            goto skip;
+        }
+       
         printf("\nSUCCESS: Found a valid nonce,\n\n    ");
         for (unsigned char *it = pt + 48; it < pt + 64; ++it)
             printf("%c", *it);
         printf("\n\nThis produces a signature hash of ");
         for (int i = 0; i < SHA256_BLOCK_SIZE; i++)
             printf("%02x", block_hash[i]);
-        printf(".\n");
+        printf(", which is %f%% of the threshold.\n", percentage);
 
-        return 0;
+        if (percentage > 85)
+            return 0;
 
         skip:
         // Count number of attempts, so far.
